@@ -10,3 +10,5 @@ nohup.out
 *.mp3
 *.wav
 *.ogg
+.venv311/
+models/kokoro/

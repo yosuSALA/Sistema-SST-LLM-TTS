@@ -1,59 +1,61 @@
-"""TTS module — Piper TTS wrapper (local, Spanish, CPU-fast)."""
+"""TTS module — Kokoro (hexgrad/Kokoro-82M) wrapper."""
 import asyncio
 import io
 import os
-import wave
-from pathlib import Path
 
-from piper.voice import PiperVoice
+import numpy as np
+import soundfile as sf
+from kokoro import KPipeline
 
-# Model path — defaults to bundled es_MX voice
-_DEFAULT_MODEL = os.getenv(
-    "TTS_MODEL_PATH",
-    str(Path(__file__).parent.parent / "models/piper/es/es_MX/claude/high/es_MX-claude-high.onnx"),
-)
+# GTX 1060 = SM 6.1, incompatible with PyTorch >= 2.0 CUDA → force CPU
+TTS_DEVICE = os.getenv("TTS_DEVICE", "cpu")
+TTS_LANG = os.getenv("TTS_LANG", "e")          # 'e' = Spanish
+TTS_VOICE = os.getenv("TTS_VOICE", "ef_dora")  # ef_dora, em_alex, em_santa
 TTS_SPEED = float(os.getenv("TTS_SPEED", "1.0"))
+SAMPLE_RATE = 24000
 
-_voice: PiperVoice | None = None
-
-
-def get_voice() -> PiperVoice:
-    global _voice
-    if _voice is None:
-        model_path = _DEFAULT_MODEL
-        print(f"[TTS] Loading Piper voice from {model_path}")
-        _voice = PiperVoice.load(model_path)
-        print(f"[TTS] Loaded. Sample rate: {_voice.config.sample_rate}Hz")
-    return _voice
+_pipeline: KPipeline | None = None
 
 
-def _synthesize_sync(text: str) -> bytes:
-    """Blocking synthesis — run in thread via asyncio.to_thread."""
-    voice = get_voice()
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as wav_out:
-        wav_out.setnchannels(1)
-        wav_out.setsampwidth(2)  # 16-bit PCM
-        first = True
-        for chunk in voice.synthesize(text):
-            if first:
-                wav_out.setframerate(chunk.sample_rate)
-                first = False
-            wav_out.writeframes(chunk.audio_int16_bytes)
-    return buf.getvalue()
+def get_pipeline() -> KPipeline:
+    global _pipeline
+    if _pipeline is None:
+        print(f"[TTS] Loading Kokoro (lang={TTS_LANG}, device={TTS_DEVICE})...")
+        _pipeline = KPipeline(
+            lang_code=TTS_LANG,
+            repo_id="hexgrad/Kokoro-82M",
+            device=TTS_DEVICE,
+        )
+        print("[TTS] Kokoro loaded.")
+    return _pipeline
 
 
-async def synthesize(text: str, **kwargs) -> bytes:
-    """Convert text to WAV audio bytes using Piper TTS."""
-    return await asyncio.to_thread(_synthesize_sync, text)
+def _synthesize_sync(text: str, voice: str, speed: float) -> bytes:
+    pipeline = get_pipeline()
+    segments = []
+    for _, _, audio in pipeline(text, voice=voice, speed=speed, split_pattern=r"\n+"):
+        if audio is not None:
+            segments.append(audio)
+
+    if not segments:
+        segments.append(np.zeros(SAMPLE_RATE, dtype=np.float32))
+
+    final = np.concatenate(segments)
+    if final.dtype != np.float32:
+        final = final.astype(np.float32)
+
+    out = io.BytesIO()
+    sf.write(out, final, SAMPLE_RATE, format="WAV", subtype="PCM_16")
+    return out.getvalue()
+
+
+async def synthesize(text: str, voice: str | None = None, speed: float | None = None) -> bytes:
+    """Convert text to WAV audio bytes using Kokoro."""
+    v = voice or TTS_VOICE
+    s = speed or TTS_SPEED
+    return await asyncio.to_thread(_synthesize_sync, text, v, s)
 
 
 async def list_spanish_voices() -> list[str]:
-    """List available TTS voices (static — Piper uses local model files)."""
-    models_dir = Path(__file__).parent.parent / "models/piper"
-    voices = []
-    if models_dir.exists():
-        for f in models_dir.rglob("*.onnx"):
-            if not f.name.endswith(".json"):
-                voices.append(f.stem)
-    return voices if voices else ["es_MX-claude-high"]
+    """Available Spanish voices in Kokoro-82M."""
+    return ["ef_dora", "em_alex", "em_santa"]
