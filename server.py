@@ -75,7 +75,8 @@ async def api_health():
     return {
         "status": "ok",
         "model": os.getenv("OLLAMA_MODEL", "gemma-4b-pro:latest"),
-        "tts_voice": os.getenv("TTS_VOICE", "e_isabella"),
+        "tts_engine": "piper",
+        "tts_model": os.path.basename(os.getenv("TTS_MODEL_PATH", "es_MX-claude-high")),
         "whisper_model": os.getenv("WHISPER_MODEL", "base"),
     }
 
@@ -286,7 +287,7 @@ document.addEventListener('keydown', unlockAudio);
 
 // ── Health check ────────────────────────────────────────────────────────────
 fetch('/api/health').then(r => r.json()).then(d => {
-  document.getElementById('status').textContent = `${d.model} · ${d.tts_voice}`;
+  document.getElementById('status').textContent = `${d.model} · ${d.tts_engine}:${d.tts_model}`;
 }).catch(() => {
   document.getElementById('status').textContent = 'error connecting';
 });
