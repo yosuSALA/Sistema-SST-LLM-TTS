@@ -4,6 +4,7 @@ import io
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -39,7 +40,7 @@ async def api_chat(text: str = Form(...)):
     return Response(
         content=audio,
         media_type="audio/wav",
-        headers={"X-Response-Text": response_text.encode("utf-8").decode("latin-1")},
+        headers={"X-Response-Text": quote(response_text)},
     )
 
 
@@ -52,7 +53,7 @@ async def api_voice(audio: UploadFile = File(...)):
     # STT
     transcript = await asyncio.to_thread(stt.transcribe_bytes, audio_bytes, ext)
     if not transcript:
-        raise HTTPException(400, "Could not transcribe audio")
+        transcript = "(audio no claro)"  # Don't 400 — still respond with TTS
 
     # LLM
     response_text = await llm.simple_ask(transcript)
@@ -64,8 +65,8 @@ async def api_voice(audio: UploadFile = File(...)):
         content=audio_out,
         media_type="audio/wav",
         headers={
-            "X-Transcript": transcript.encode("utf-8").decode("latin-1"),
-            "X-Response-Text": response_text.encode("utf-8").decode("latin-1"),
+            "X-Transcript": quote(transcript),
+            "X-Response-Text": quote(response_text),
         },
     )
 
@@ -317,9 +318,7 @@ async function sendText() {
     const res = await fetch('/api/chat', { method: 'POST', body: fd });
     if (!res.ok) throw new Error(await res.text());
 
-    const responseText = decodeURIComponent(escape(
-      res.headers.get('X-Response-Text') || '...'
-    ));
+    const responseText = decodeURIComponent(res.headers.get('X-Response-Text') || '...');
     const rawBlob = await res.blob();
     const blob = new Blob([rawBlob], { type: 'audio/wav' });
     thinking.remove();
@@ -374,10 +373,8 @@ async function sendVoice() {
     const res = await fetch('/api/voice', { method: 'POST', body: fd });
     if (!res.ok) throw new Error(await res.text());
 
-    const transcript = res.headers.get('X-Transcript') || '';
-    const responseText = decodeURIComponent(escape(
-      res.headers.get('X-Response-Text') || '...'
-    ));
+    const transcript = decodeURIComponent(res.headers.get('X-Transcript') || '');
+    const responseText = decodeURIComponent(res.headers.get('X-Response-Text') || '...');
     const rawBlob = await res.blob();
     const audioBlob = new Blob([rawBlob], { type: 'audio/wav' });
     thinking.remove();
