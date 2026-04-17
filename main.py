@@ -11,9 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import llm
-import stt
-import tts
+from src import llm, stt, tts
 
 # ── Bot setup ────────────────────────────────────────────────────────────────
 
@@ -29,7 +27,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"[BOT] Logged in as {bot.user} (ID: {bot.user.id})")
     print(f"[BOT] Ollama model: {os.getenv('OLLAMA_MODEL', 'gemma-4b-pro:latest')}")
-    print(f"[BOT] TTS voice: {os.getenv('TTS_VOICE', 'es-MX-DaliaNeural')}")
+    print(f"[BOT] TTS voice: {os.getenv('TTS_VOICE', 'e_isabella')}")
     print("[BOT] Ready. Send a voice message or use !ask / !habla")
 
 
@@ -96,7 +94,7 @@ async def _handle_voice_message(message: discord.Message, attachment: discord.At
                 f"**Escuché:** {transcript}\n**Respuesta:** {response_text}",
                 file=discord.File(
                     io.BytesIO(audio_response),
-                    filename="respuesta.mp3",
+                    filename="respuesta.wav",
                     description="Respuesta de voz",
                 ),
             )
@@ -128,7 +126,7 @@ async def cmd_habla(ctx: commands.Context, *, text: str):
             await ctx.reply(
                 file=discord.File(
                     io.BytesIO(audio_bytes),
-                    filename="audio.mp3",
+                    filename="audio.wav",
                 )
             )
         except Exception as e:
@@ -146,7 +144,7 @@ async def cmd_pregunta(ctx: commands.Context, *, text: str):
                 f"**Respuesta:** {response_text}",
                 file=discord.File(
                     io.BytesIO(audio_bytes),
-                    filename="respuesta.mp3",
+                    filename="respuesta.wav",
                 ),
             )
         except Exception as e:

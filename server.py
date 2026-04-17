@@ -11,9 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import llm
-import stt
-import tts
+from src import llm, stt, tts
 
 app = FastAPI(title="AI Lab Local", docs_url=None, redoc_url=None)
 
@@ -28,26 +26,26 @@ async def api_ask(text: str = Form(...)):
 
 @app.post("/api/speak")
 async def api_speak(text: str = Form(...)):
-    """Text → TTS → MP3 audio bytes."""
+    """Text → TTS → WAV audio bytes."""
     audio = await tts.synthesize(text)
-    return Response(content=audio, media_type="audio/mpeg")
+    return Response(content=audio, media_type="audio/wav")
 
 
 @app.post("/api/chat")
 async def api_chat(text: str = Form(...)):
-    """Text → LLM → TTS → MP3 (full pipeline, no STT)."""
+    """Text → LLM → TTS → WAV (full pipeline, no STT)."""
     response_text = await llm.simple_ask(text)
     audio = await tts.synthesize(response_text)
     return Response(
         content=audio,
-        media_type="audio/mpeg",
+        media_type="audio/wav",
         headers={"X-Response-Text": response_text.encode("utf-8").decode("latin-1")},
     )
 
 
 @app.post("/api/voice")
 async def api_voice(audio: UploadFile = File(...)):
-    """Audio file → STT → LLM → TTS → MP3 (full pipeline)."""
+    """Audio file → STT → LLM → TTS → WAV (full pipeline)."""
     audio_bytes = await audio.read()
     ext = Path(audio.filename).suffix if audio.filename else ".ogg"
 
@@ -64,7 +62,7 @@ async def api_voice(audio: UploadFile = File(...)):
 
     return Response(
         content=audio_out,
-        media_type="audio/mpeg",
+        media_type="audio/wav",
         headers={
             "X-Transcript": transcript.encode("utf-8").decode("latin-1"),
             "X-Response-Text": response_text.encode("utf-8").decode("latin-1"),
@@ -77,7 +75,7 @@ async def api_health():
     return {
         "status": "ok",
         "model": os.getenv("OLLAMA_MODEL", "gemma-4b-pro:latest"),
-        "tts_voice": os.getenv("TTS_VOICE", "es-MX-DaliaNeural"),
+        "tts_voice": os.getenv("TTS_VOICE", "e_isabella"),
         "whisper_model": os.getenv("WHISPER_MODEL", "base"),
     }
 
@@ -322,7 +320,7 @@ async function sendText() {
       res.headers.get('X-Response-Text') || '...'
     ));
     const rawBlob = await res.blob();
-    const blob = new Blob([rawBlob], { type: 'audio/mpeg' });
+    const blob = new Blob([rawBlob], { type: 'audio/wav' });
     thinking.remove();
     addBotMessage(responseText, blob);
   } catch (err) {
@@ -380,7 +378,7 @@ async function sendVoice() {
       res.headers.get('X-Response-Text') || '...'
     ));
     const rawBlob = await res.blob();
-    const audioBlob = new Blob([rawBlob], { type: 'audio/mpeg' });
+    const audioBlob = new Blob([rawBlob], { type: 'audio/wav' });
     thinking.remove();
 
     // Update the [Nota de voz] message with transcript
